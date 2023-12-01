@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/rust:1-1-bullseye
+
+    volumes:
+      - ..:/workspace:Z
+    
+    security_opt:
+      - seccomp=unconfined
+
+    command: sleep infinity
