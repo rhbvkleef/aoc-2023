@@ -1,35 +1,12 @@
+use super::{ Day01Error, firstlast };
+
 use aoc_runner_derive::aoc;
-use lazy_regex::{ Regex, regex };
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum Day01Error {
-    #[error("Could not convert {0} to number.")]
-    NumberUnrecognized(String),
-    #[error("Could not find numbers on line {0}")]
-    NoMatchesFoundOnLine(String),
-}
+use bstr::{BString, ByteSlice};
 
 /// # Examples
 /// 
 /// ```
-/// use aoc_2023::day01::part1_generic;
-/// assert_eq!(142, part1_generic("1abc2
-/// pqr3stu8vwx
-/// a1b2c3d4e5f
-/// treb7uchet").unwrap())
-/// ```
-#[aoc(day1, part1, Generic)]
-pub fn part1_generic(input: &str) -> Result<u32, Day01Error> {
-    let re = regex!(r"^[0-9]");
-
-    solve(re, input)
-}
-
-/// # Examples
-/// 
-/// ```
-/// use aoc_2023::day01::part1_specialized;
+/// use aoc_2023::day01::optimized::part1_specialized;
 /// assert_eq!(142, part1_specialized("1abc2
 /// pqr3stu8vwx
 /// a1b2c3d4e5f
@@ -52,8 +29,8 @@ pub fn part1_specialized(input: &str) -> Result<u32, Day01Error> {
 /// # Examples
 /// 
 /// ```
-/// use aoc_2023::day01::part2_generic;
-/// assert_eq!(281, part2_generic("two1nine
+/// use aoc_2023::day01::optimized::part2_statem;
+/// assert_eq!(281, part2_statem(b"two1nine
 /// eightwothree
 /// abcone2threexyz
 /// xtwone3four
@@ -63,55 +40,31 @@ pub fn part1_specialized(input: &str) -> Result<u32, Day01Error> {
 /// ```
 /// 
 /// ```
-/// use aoc_2023::day01::part2_generic;
-/// assert_eq!(79, part2_generic("sevenine").unwrap())
-/// ```
-#[aoc(day1, part2, Generic)]
-pub fn part2_generic(input: &str) -> Result<u32, Day01Error> {
-    let re = regex!(r"^(?:[0-9]|one|two|three|four|five|six|seven|eight|nine)");
-
-    solve(re, input)
-}
-
-/// # Examples
-/// 
-/// ```
-/// use aoc_2023::day01::part2_statem;
-/// assert_eq!(281, part2_statem("two1nine
-/// eightwothree
-/// abcone2threexyz
-/// xtwone3four
-/// 4nineeightseven2
-/// zoneight234
-/// 7pqrstsixteen").unwrap())
-/// ```
-/// 
-/// ```
-/// use aoc_2023::day01::part2_statem;
-/// assert_eq!(79, part2_statem("sevenine").unwrap())
+/// use aoc_2023::day01::optimized::part2_statem;
+/// assert_eq!(79, part2_statem(b"sevenine").unwrap())
 /// ```
 #[aoc(day1, part2, Statemachine)]
-pub fn part2_statem(input: &str) -> Result<u32, Day01Error> {
-    input.lines().map(|line| -> Result<u32, Day01Error> {
+pub fn part2_statem(input: &[u8]) -> Result<u32, Day01Error> {
+    BString::from(input).lines().map(|line| {
         let mut forward_state = ForwardAutomaton::Empty;
-        let mut forward_iter = line.chars().into_iter();
+        let mut forward_iter = line.iter();
 
         while ! matches!(forward_state, ForwardAutomaton::Done(_)) {
             if let Some(chr) = forward_iter.next() {
-                forward_state = forward_state.take(chr);
+                forward_state = forward_state.take(*chr);
             } else {
-                return Err(Day01Error::NoMatchesFoundOnLine(line.to_string()));
+                return Err(Day01Error::NoMatchesFoundOnLine(unsafe { String::from_utf8_unchecked(Vec::from(line)) }));
             }
         }
 
         let mut reverse_state = ReverseAutomaton::Empty;
-        let mut reverse_iter = line.chars().rev();
+        let mut reverse_iter = line.iter().rev();
 
         while ! matches!(reverse_state, ReverseAutomaton::Done(_)) {
             if let Some(chr) = reverse_iter.next() {
-                reverse_state = reverse_state.take(chr);
+                reverse_state = reverse_state.take(*chr);
             } else {
-                return Err(Day01Error::NoMatchesFoundOnLine(line.to_string()));
+                return Err(Day01Error::NoMatchesFoundOnLine(unsafe { String::from_utf8_unchecked(Vec::from(line)) }));
             }
         }
 
@@ -119,53 +72,6 @@ pub fn part2_statem(input: &str) -> Result<u32, Day01Error> {
     }).sum()
 }
 
-fn solve(regex: &Regex, input: &str) -> Result<u32, Day01Error> {
-    input.lines()
-        .map(|line| solve_line(regex, line))
-        .sum()
-}
-
-fn solve_line(regex: &Regex, line: &str) -> Result<u32, Day01Error> {
-    let (first, last) = firstlast(
-        (0..line.len())
-            .map(|i| regex.find(&line[i..]))
-            .filter_map(std::convert::identity)
-        ).ok_or_else(|| Day01Error::NoMatchesFoundOnLine(line.to_string()))?;
-
-    
-    let first = as_numval(first.as_str())
-        .ok_or_else(|| Day01Error::NumberUnrecognized(first.as_str().to_string()))?;
-    let last = as_numval(last.as_str())
-        .ok_or_else(|| Day01Error::NumberUnrecognized(last.as_str().to_string()))?;
-    
-    Ok(first * 10 + last)
-}
-
-fn firstlast<T: Clone>(mut it: impl Iterator<Item = T>) -> Option<(T, T)> {
-    if let Some(first) = it.next() {
-        let last = it.last().unwrap_or(first.clone());
-
-        Some((first, last))
-    } else {
-        None
-    }
-}
-
-fn as_numval(the_match: &str) -> Option<u32> {
-    match the_match {
-        "0" | "zero" => Some(0),
-        "1" | "one" => Some(1),
-        "2" | "two" => Some(2),
-        "3" | "three" => Some(3),
-        "4" | "four" => Some(4),
-        "5" | "five" => Some(5),
-        "6" | "six" => Some(6),
-        "7" | "seven" => Some(7),
-        "8" | "eight" => Some(8),
-        "9" | "nine" => Some(9),
-        _ => None,
-    }
-}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum ForwardAutomaton {
@@ -194,137 +100,137 @@ enum ForwardAutomaton {
     THRE,
     SEVE,
     EIGH,
-    Done(u32),
+    Done(u8),
 }
 
 impl ForwardAutomaton {
     fn unwrap(self) -> u32 {
         if let Self::Done(num) = self {
-            num
+            num as u32
         } else {
             panic!("Unwrapped automaton state that was not done {:?}", self)
         }
     }
 
-    fn take(self, chr: char) -> Self {
+    fn take(self, chr: u8) -> Self {
         match self {
             ForwardAutomaton::Empty => match chr {
-                'o' => Self::O,
-                't' => Self::T,
-                'f' => Self::F,
-                's' => Self::S,
-                'e' => Self::E,
-                'n' => Self::N,
-                '0' => Self::Done(0),
-                '1' => Self::Done(10),
-                '2' => Self::Done(20),
-                '3' => Self::Done(30),
-                '4' => Self::Done(40),
-                '5' => Self::Done(50),
-                '6' => Self::Done(60),
-                '7' => Self::Done(70),
-                '8' => Self::Done(80),
-                '9' => Self::Done(90),
+                b'o' => Self::O,
+                b't' => Self::T,
+                b'f' => Self::F,
+                b's' => Self::S,
+                b'e' => Self::E,
+                b'n' => Self::N,
+                b'0' => Self::Done(0),
+                b'1' => Self::Done(10),
+                b'2' => Self::Done(20),
+                b'3' => Self::Done(30),
+                b'4' => Self::Done(40),
+                b'5' => Self::Done(50),
+                b'6' => Self::Done(60),
+                b'7' => Self::Done(70),
+                b'8' => Self::Done(80),
+                b'9' => Self::Done(90),
                 _ => Self::Empty,
             },
             ForwardAutomaton::O => match chr {
-                'n' => Self::ON,
+                b'n' => Self::ON,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::T => match chr {
-                'w' => Self::TW,
-                'h' => Self::TH,
+                b'w' => Self::TW,
+                b'h' => Self::TH,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::F => match chr {
-                'o' => Self::FO,
-                'i' => Self::FI,
+                b'o' => Self::FO,
+                b'i' => Self::FI,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::S => match chr {
-                'i' => Self::SI,
-                'e' => Self::SE,
+                b'i' => Self::SI,
+                b'e' => Self::SE,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::E => match chr {
-                'i' => Self::EI,
+                b'i' => Self::EI,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::N => match chr {
-                'i' => Self::NI,
+                b'i' => Self::NI,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::ON => match chr {
-                'e' => Self::Done(10),
+                b'e' => Self::Done(10),
                 _ => Self::N.take(chr),
             },
             ForwardAutomaton::TW => match chr {
-                'o' => Self::Done(20),
+                b'o' => Self::Done(20),
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::TH => match chr {
-                'r' => Self::THR,
+                b'r' => Self::THR,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::FO => match chr {
-                'u' => Self::FOU,
+                b'u' => Self::FOU,
                 _ => Self::O.take(chr),
             },
             ForwardAutomaton::FI => match chr {
-                'v' => Self::FIV,
+                b'v' => Self::FIV,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::SI => match chr {
-                'x' => Self::Done(60),
+                b'x' => Self::Done(60),
                 _ => Self::Empty.take(chr),
 
             },
             ForwardAutomaton::SE => match chr {
-                'v' => Self::SEV,
+                b'v' => Self::SEV,
                 _ => Self::E.take(chr),
             },
             ForwardAutomaton::EI => match chr {
-                'g' => Self::EIG,
+                b'g' => Self::EIG,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::NI => match chr {
-                'n' => Self::NIN,
+                b'n' => Self::NIN,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::THR => match chr {
-                'e' => Self::THRE,
+                b'e' => Self::THRE,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::FOU => match chr {
-                'r' => Self::Done(40),
+                b'r' => Self::Done(40),
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::FIV => match chr {
-                'e' => Self::Done(50),
+                b'e' => Self::Done(50),
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::SEV => match chr {
-                'e' => Self::SEVE,
+                b'e' => Self::SEVE,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::EIG => match chr {
-                'h' => Self::EIGH,
+                b'h' => Self::EIGH,
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::NIN => match chr {
-                'e' => Self::Done(90),
+                b'e' => Self::Done(90),
                 _ => Self::N.take(chr),
             },
             ForwardAutomaton::THRE => match chr {
-                'e' => Self::Done(30),
+                b'e' => Self::Done(30),
                 _ => Self::E.take(chr),
             },
             ForwardAutomaton::SEVE => match chr {
-                'n' => Self::Done(70),
+                b'n' => Self::Done(70),
                 _ => Self::E.take(chr),
             },
             ForwardAutomaton::EIGH => match chr {
-                't' => Self::Done(80),
+                b't' => Self::Done(80),
                 _ => Self::Empty.take(chr),
             },
             ForwardAutomaton::Done(_) => self,
@@ -358,135 +264,136 @@ enum ReverseAutomaton {
     HREE,
     EVEN,
     IGHT,
-    Done(u32),
+    Done(u8),
 }
 
 impl ReverseAutomaton {
     fn unwrap(self) -> u32 {
         if let Self::Done(num) = self {
-            num
+            num as u32
         } else {
             panic!("Unwrapped automaton state that was not done {:?}", self)
         }
     }
 
-    fn take(self, chr: char) -> Self {
+    fn take(self, chr: u8) -> Self {
         match self {
             ReverseAutomaton::Empty => match chr {
-                'e' => Self::E,
-                'o' => Self::O,
-                'r' => Self::R,
-                'x' => Self::X,
-                'n' => Self::N,
-                't' => Self::T,
-                '0' => Self::Done(0),
-                '1' => Self::Done(1),
-                '2' => Self::Done(2),
-                '3' => Self::Done(3),
-                '4' => Self::Done(4),
-                '5' => Self::Done(5),
-                '6' => Self::Done(6),
-                '7' => Self::Done(7),
-                '8' => Self::Done(8),
-                '9' => Self::Done(9),
+                b'e' => Self::E,
+                b'o' => Self::O,
+                b'r' => Self::R,
+                b'x' => Self::X,
+                b'n' => Self::N,
+                b't' => Self::T,
+                b'0' => Self::Done(0),
+                b'1' => Self::Done(1),
+                b'2' => Self::Done(2),
+                b'3' => Self::Done(3),
+                b'4' => Self::Done(4),
+                b'5' => Self::Done(5),
+                b'6' => Self::Done(6),
+                b'7' => Self::Done(7),
+                b'8' => Self::Done(8),
+                b'9' => Self::Done(9),
                 _ => Self::Empty,
             },
             ReverseAutomaton::E => match chr {
-                'n' => Self::NE,
-                'e' => Self::EE,
-                'v' => Self::VE,
+                b'n' => Self::NE,
+                b'e' => Self::EE,
+                b'v' => Self::VE,
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::O => match chr {
-                'w' => Self::WO,
+                b'w' => Self::WO,
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::R => match chr {
-                'u' => Self::UR,
+                b'u' => Self::UR,
                 _ => Self::Empty.take(chr)
             }
             ReverseAutomaton::X => match chr {
-                'i' => Self::IX,
+                b'i' => Self::IX,
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::N => match chr {
-                'e' => Self::EN,
+                b'e' => Self::EN,
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::T => match chr {
-                'h' => Self::HT,
+                b'h' => Self::HT,
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::NE => match chr {
-                'o' => Self::Done(1),
-                'i' => Self::INE,
+                b'o' => Self::Done(1),
+                b'i' => Self::INE,
                 _ => Self::N.take(chr),
             },
             ReverseAutomaton::WO => match chr {
-                't' => Self::Done(2),
+                b't' => Self::Done(2),
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::EE => match chr {
-                'r' => Self::REE,
+                b'r' => Self::REE,
                 _ => Self::E.take(chr),
             },
             ReverseAutomaton::UR => match chr {
-                'o' => Self::OUR,
+                b'o' => Self::OUR,
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::VE => match chr {
-                'i' => Self::IVE,
+                b'i' => Self::IVE,
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::IX => match chr {
-                's' => Self::Done(6),
+                b's' => Self::Done(6),
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::EN => match chr {
-                'v' => Self::VEN,
+                b'v' => Self::VEN,
                 _ => Self::E.take(chr),
             },
             ReverseAutomaton::HT => match chr {
-                'g' => Self::GHT,
+                b'g' => Self::GHT,
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::REE => match chr {
-                'h' => Self::HREE,
+                b'h' => Self::HREE,
                 _ => Self::R.take(chr),
             },
             ReverseAutomaton::OUR => match chr {
-                'f' => Self::Done(4),
+                b'f' => Self::Done(4),
                 _ => Self::O.take(chr),
             },
             ReverseAutomaton::IVE => match chr {
-                'f' => Self::Done(5),
+                b'f' => Self::Done(5),
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::VEN => match chr {
-                'e' => Self::EVEN,
+                b'e' => Self::EVEN,
                 _ => Self::VE.take(chr),
             },
             ReverseAutomaton::GHT => match chr {
-                'i' => Self::IGHT,
+                b'i' => Self::IGHT,
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::INE => match chr {
-                'n' => Self::Done(9),
+                b'n' => Self::Done(9),
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::HREE => match chr {
-                't' => Self::Done(3),
+                b't' => Self::Done(3),
                 _ => Self::Empty.take(chr),
             },
             ReverseAutomaton::EVEN => match chr {
-                's' => Self::Done(7),
+                b's' => Self::Done(7),
                 _ => Self::E.take(chr),
             },
             ReverseAutomaton::IGHT => match chr {
-                'e' => Self::Done(8),
+                b'e' => Self::Done(8),
                 _ => Self::E.take(chr),
             },
             ReverseAutomaton::Done(_) => self,
         }
     }
 }
+
