@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use aoc_runner_derive::{ aoc, aoc_generator };
-use nom::{ bytes::complete::tag, IResult, combinator::{recognize, map_res}, character::complete::digit1, multi::separated_list0, Parser, sequence::pair, branch::alt };
+use nom::{ bytes::complete::tag, IResult, combinator::{recognize, map_res}, character::complete::digit1, multi::separated_list0, Parser, sequence::pair, branch::alt, Err, error::Error };
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct Game {
@@ -16,12 +17,20 @@ pub struct Turn {
     blue: u32,
 }
 
+#[derive(Debug, Error)]
+pub enum Day02Error {
+    #[error("Failed to parse due to remainder: {0}")]
+    Rest(String),
+    #[error("Failed to parse due to nom error: {0}")]
+    ParseError(Err<Error<String>>),
+}
+
 #[aoc_generator(day2)]
-pub fn parse(input: &str) -> Result<Vec<Game>, String> {
+pub fn parse(input: &str) -> Result<Vec<Game>, Day02Error> {
     match separated_list0(tag("\n"), game)(input) {
         Ok(("", result)) => Ok(result),
-        Ok((rest, _)) => Err(format!("Failed to parse, rest text: {}", rest)),
-        Err(error) => Err(format!("{}", error)),
+        Ok((rest, _)) => Err(Day02Error::Rest(rest.to_owned())),
+        Err(error) => Err(Day02Error::ParseError(error.to_owned())),
     }
 }
 
