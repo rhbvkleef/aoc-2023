@@ -2,17 +2,21 @@ use std::collections::HashMap;
 
 use aoc_runner_derive::{aoc, aoc_generator};
 
+type Coordinate = (usize, usize);
+type Part = (char, Coordinate);
+type Number = (u32, Option<Part>);
+
 #[aoc_generator(day3)]
-pub fn parse(input: &str) -> Vec<(u32, Option<(char, (usize, usize))>)> {
+pub fn parse(input: &str) -> Vec<Number> {
     let mut nums: HashMap<(usize, usize), usize> = HashMap::new();
-    let mut nums_shortlist: Vec<(u32, Option<(char, (usize, usize))>)> = Vec::new();
+    let mut nums_shortlist: Vec<Number> = Vec::new();
 
     let mut num_lines = 0;
     input.lines().enumerate().for_each(|l| {
         let (y, line) = l;
 
         let mut current_number: u32 = 0;
-        let mut current_number_coords: Vec<(usize, usize)> = Vec::new();
+        let mut current_number_coords: Vec<Coordinate> = Vec::new();
 
         line.chars().enumerate().for_each(|c| {
             let (x, chr) = c;
@@ -85,7 +89,7 @@ pub fn parse(input: &str) -> Vec<(u32, Option<(char, (usize, usize))>)> {
 /// .664.598..")));
 /// ```
 #[aoc(day3, part1)]
-pub fn part1(nums_shortlist: &[(u32, Option<(char, (usize, usize))>)]) -> u32 {
+pub fn part1(nums_shortlist: &[Number]) -> u32 {
     nums_shortlist.iter().map(|v| {
         if v.1.is_some() {
             v.0
@@ -111,8 +115,8 @@ pub fn part1(nums_shortlist: &[(u32, Option<(char, (usize, usize))>)]) -> u32 {
 /// .664.598..")));
 /// ```
 #[aoc(day3, part2)]
-pub fn part2(nums_shortlist: &[(u32, Option<(char, (usize, usize))>)]) -> u32 {
-    let mut gears: HashMap<(usize, usize), u32> = HashMap::new();
+pub fn part2(nums_shortlist: &[Number]) -> u32 {
+    let mut gears: HashMap<Coordinate, u32> = HashMap::new();
     let mut actual_gears: Vec<u32> = Vec::new();
 
     for (num, part) in nums_shortlist {
